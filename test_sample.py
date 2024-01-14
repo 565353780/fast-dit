@@ -9,7 +9,7 @@ torch.backends.cudnn.allow_tf32 = True
 
 def main():
     from fast_dit.Model.diffusion import create_diffusion
-    from fast_dit.Config.dit import DiT_models
+    from fast_dit.Model.dit import DiT
 
     # Setup PyTorch:
     torch.manual_seed(0)
@@ -20,11 +20,19 @@ def main():
     num_classes = 1000
     num_sampling_steps = 2
 
-    model = DiT_models["DiT-XL/2"](input_size=latent_size, num_classes=num_classes).to(
-        device
-    )
+    model = DiT(
+        input_size=latent_size,
+        patch_size=2,
+        in_channels=4,
+        hidden_size=1152,
+        depth=28,
+        num_heads=16,
+        mlp_ratio=4.0,
+        class_dropout_prob=0.1,
+        num_classes=num_classes,
+        learn_sigma=True,
+    ).to(device)
 
-    ckpt_path = "DiT-XL-2-256x256.pt"
     # state_dict = find_model(ckpt_path)
     # model.load_state_dict(state_dict)
     model.eval()  # important!
