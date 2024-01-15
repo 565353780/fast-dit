@@ -32,7 +32,7 @@ def test():
 
     # Labels to condition the model with (feel free to change):
 
-    batch_size = 1
+    batch_size = 10
     z = torch.randn(batch_size, 1, asdf_channel, asdf_dim, device=device)
     y = torch.randn(batch_size, 1, asdf_channel, context_dim, device=device)
 
