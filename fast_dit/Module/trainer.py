@@ -20,11 +20,11 @@ torch.backends.cudnn.allow_tf32 = True
 class Trainer(object):
     def __init__(self) -> None:
         self.asdf_dataset_folder_path = '/home/chli/chLi/Dataset/ShapeNet/asdf/'
-        self.epochs = 1
-        self.global_batch_size = 50
+        self.epochs = 100000
+        self.global_batch_size = 256
         self.num_workers = 4
         self.log_every = 1
-        self.ckpt_every = 1
+        self.ckpt_every = 300
 
         self.asdf_channel = 100
         self.asdf_dim = 40
