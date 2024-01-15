@@ -1,5 +1,6 @@
 import torch
 
+from data_convert.Method.data import toData
 from a_sdf.Model.asdf_model import ASDFModel
 
 from fast_dit.Model.diffusion import create_diffusion
@@ -60,4 +61,15 @@ class Sampler(object):
         )
         samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
         print(samples.shape)
+
+        asdf_model = ASDFModel(
+            max_sh_3d_degree = 4,
+            max_sh_2d_degree = 4,
+            use_inv = True,
+            sample_direction_num = 200,
+            direction_upscale = 10)
+        asdf_model.sh_3d_degree_max = 4
+        asdf_model.sh_2d_degree_max = 4
+        asdf_model.loadParams(toData(samples[0].reshape(100, 40), 'numpy'))
+        asdf_model.renderDetectPoints()
         return True
