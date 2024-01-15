@@ -5,26 +5,23 @@ from fast_dit.Model.CrossAttention.attention import Attention
 
 
 class MultiHeadCrossAttention(nn.Module):
-    def __init__(self, hidden_size, all_head_size, head_num):
+    def __init__(self, query_dim, context_dim, heads, dim_head):
         super().__init__()
-        self.hidden_size = hidden_size  # 输入维度
-        self.all_head_size = all_head_size  # 输出维度
-        self.num_heads = head_num  # 注意头的数量
-        self.h_size = all_head_size // head_num
+        self.query_dim = query_dim
+        self.context_dim = context_dim
+        self.num_heads = heads
+        self.h_size = dim_head
 
-        assert all_head_size % head_num == 0
+        all_head_size = heads * dim_head
 
-        self.linear_q = nn.Linear(hidden_size, all_head_size, bias=False)
-        self.linear_k = nn.Linear(hidden_size, all_head_size, bias=False)
-        self.linear_v = nn.Linear(hidden_size, all_head_size, bias=False)
-        self.linear_output = nn.Linear(all_head_size, hidden_size)
+        self.linear_q = nn.Linear(query_dim, all_head_size, bias=False)
+        self.linear_k = nn.Linear(context_dim, all_head_size, bias=False)
+        self.linear_v = nn.Linear(context_dim, all_head_size, bias=False)
+        self.linear_output = nn.Linear(all_head_size, query_dim)
 
         # normalization
         self.norm = sqrt(all_head_size)
-
-    def print(self):
-        print(self.hidden_size, self.all_head_size)
-        print(self.linear_k, self.linear_q, self.linear_v)
+        return
 
     def forward(self, x, y):
         batch_size = x.size(0)
