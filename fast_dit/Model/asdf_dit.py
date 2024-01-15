@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 
-from fast_dit.Model.timestep_embedder import TimestepEmbedder
-from fast_dit.Model.label_embedder import LabelEmbedder
-from fast_dit.Model.DiT.block import DiTBlock
 from fast_dit.Model.DiT.final_layer import FinalLayer
+from fast_dit.Model.DiT.block import DiTBlock
+from fast_dit.Model.CrossAttention.cross import CrossAttention
+from fast_dit.Model.timestep_embedder import TimestepEmbedder
 
 
 class ASDFDiT(nn.Module):
@@ -14,42 +14,39 @@ class ASDFDiT(nn.Module):
 
     def __init__(
         self,
-        asdf_dims=[100, 40],
-        patch_size=2,
-        in_channels=4,
-        hidden_size=1152,
+        asdf_channel=100,
+        asdf_dim=40,
+        context_dim=30,
+        num_heads=1,
         depth=28,
-        num_heads=16,
         mlp_ratio=4.0,
         class_dropout_prob=0.1,
-        num_classes=1000,
         learn_sigma=True,
     ):
         super().__init__()
+        self.asdf_channel = asdf_channel
+        self.asdf_dim = asdf_dim
+        self.context_dim = context_dim
         self.learn_sigma = learn_sigma
-        self.in_channels = in_channels
-        self.out_channels = in_channels * 2 if learn_sigma else in_channels
-        self.patch_size = patch_size
+        self.out_channels = 2 if learn_sigma else 1
         self.num_heads = num_heads
-        self.hidden_size = hidden_size
+        self.hidden_size = asdf_dim
 
-        assert (asdf_dims[1] * hidden_size) % (patch_size**2) == 0
+        assert self.hidden_size % num_heads == 0
+        head_dim = int(self.hidden_size / num_heads)
 
-        self.x_embedder = nn.Linear(
-            asdf_dims[1],
-            int(asdf_dims[1] * hidden_size / patch_size / patch_size),
-            bias=False,
+        self.ty_cross_attention = CrossAttention(
+            self.hidden_size, context_dim, num_heads, head_dim, 0.0
         )
-        self.t_embedder = TimestepEmbedder(hidden_size)
-        self.y_embedder = LabelEmbedder(num_classes, hidden_size, class_dropout_prob)
+        self.t_embedder = TimestepEmbedder(self.hidden_size)
 
         self.blocks = nn.ModuleList(
             [
-                DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio)
+                DiTBlock(self.hidden_size, num_heads, mlp_ratio=mlp_ratio)
                 for _ in range(depth)
             ]
         )
-        self.final_layer = FinalLayer(hidden_size, patch_size, self.out_channels)
+        self.final_layer = FinalLayer(self.hidden_size, 1, self.hidden_size)
         self.initialize_weights()
 
     def initialize_weights(self):
@@ -61,9 +58,6 @@ class ASDFDiT(nn.Module):
                     nn.init.constant_(module.bias, 0)
 
         self.apply(_basic_init)
-
-        # Initialize label embedding table:
-        nn.init.normal_(self.y_embedder.embedding_table.weight, std=0.02)
 
         # Initialize timestep embedding MLP:
         nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
@@ -92,35 +86,30 @@ class ASDFDiT(nn.Module):
         Forward pass of DiT.
         x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
         t: (N,) tensor of diffusion timesteps
-        y: (N,) tensor of class labels
+        y: (N,) tensor of contexts
         """
         print("DiT forward:")
         print("x:", x.shape)
         print("t:", t.shape)
         print("y:", y.shape)
-        N, _, H, W = x.shape
-        # (N, T, D), where T = H * W / patch_size ** 2
-        x = self.x_embedder(x)
-        print("after x_embedder, x:", x.shape)
-        assert (H * W) % (self.patch_size**2) == 0
-        T = int(H * W / self.patch_size / self.patch_size)
-        print("start reshape:", x.shape, "-->", N, T, self.hidden_size)
-        x = x.reshape(N, T, self.hidden_size)
-        print("after reshape, x:", x.shape)
+        B = x.shape[0]
+        x = x.reshape(B, self.asdf_channel, self.asdf_dim)
+        y = y.reshape(B, self.asdf_channel, self.context_dim)
         t = self.t_embedder(t)  # (N, D)
+        t = t.reshape(B, 1, self.hidden_size)
         print("after t_embedder, t:", t.shape)
-        y = self.y_embedder(y, self.training)  # (N, D)
-        print("after y_embedder, y:", y.shape)
-        c = t + y  # (N, D)
+        ty = self.ty_cross_attention(t, y)
+        print("after ty_cross_attention, ty:", ty.shape)
+        c = t + ty  # (N, D)
+        c = c.reshape(B, self.hidden_size)
         for block in self.blocks:
             x = torch.utils.checkpoint.checkpoint(
                 self.ckpt_wrapper(block), x, c
             )  # (N, T, D)
         print("after blocks, x:", x.shape)
-        x = self.final_layer(x, c)  # (N, T, patch_size ** 2 * out_channels)
+        x = self.final_layer(x, c)  # (N, T, out_channels)
         print("after final_layer, x:", x.shape)
-        x = x.reshape(N, -1, H, W)  # (N, out_channels, H, W)
-        print("after reshape, x:", x.shape)
+        x = x.reshape(B, 1, self.asdf_channel, self.asdf_dim)
         return x
 
     def forward_with_cfg(self, x, t, y, cfg_scale):
@@ -134,7 +123,7 @@ class ASDFDiT(nn.Module):
         # For exact reproducibility reasons, we apply classifier-free guidance on only
         # three channels by default. The standard approach to cfg applies it to all channels.
         # This can be done by uncommenting the following line and commenting-out the line following that.
-        # eps, rest = model_out[:, :self.in_channels], model_out[:, self.in_channels:]
+        # eps = model_out[:, 0]
         eps, rest = model_out[:, :3], model_out[:, 3:]
         cond_eps, uncond_eps = torch.split(eps, len(eps) // 2, dim=0)
         half_eps = uncond_eps + cfg_scale * (cond_eps - uncond_eps)

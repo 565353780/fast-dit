@@ -13,23 +13,14 @@ def test():
     torch.set_grad_enabled(False)
     device = "cpu"
 
-    asdf_dims = [100, 40]
+    asdf_channel = 100
+    asdf_dim = 40
+    context_dim = 30
+    num_heads = 1
     depth = 12
-    num_classes = 1000
     num_sampling_steps = 2
 
-    model = ASDFDiT(
-        asdf_dims=asdf_dims,
-        patch_size=2,
-        in_channels=1,
-        hidden_size=asdf_dims[1] * depth,
-        depth=depth,
-        num_heads=6,
-        mlp_ratio=4.0,
-        class_dropout_prob=0.1,
-        num_classes=num_classes,
-        learn_sigma=True,
-    ).to(device)
+    model = ASDFDiT(asdf_channel, asdf_dim, context_dim, num_heads, depth).to(device)
 
     # state_dict = find_model(ckpt_path)
     # model.load_state_dict(state_dict)
@@ -39,13 +30,12 @@ def test():
     # Labels to condition the model with (feel free to change):
 
     batch_size = 1
-    z = torch.randn(batch_size, 1, asdf_dims[0], asdf_dims[1], device=device)
-    y = torch.tensor([1 for _ in range(batch_size)], device=device)
+    z = torch.randn(batch_size, 1, asdf_channel, asdf_dim, device=device)
+    y = torch.randn(batch_size, 1, asdf_channel, context_dim, device=device)
 
     # Setup classifier-free guidance:
     z = torch.cat([z, z], 0)
-    y_null = torch.tensor([1000] * batch_size, device=device)
-    y = torch.cat([y, y_null], 0)
+    y = torch.cat([y, y], 0)
     model_kwargs = dict(y=y, cfg_scale=4.0)
 
     # Sample images:
