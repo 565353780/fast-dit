@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from fast_dit.Model.DiT.final_layer import FinalLayer
-from fast_dit.Model.DiT.block import DiTBlock
+from fast_dit.Model.DiT.asdf_block import ASDFDiTBlock
 from fast_dit.Model.CrossAttention.cross import CrossAttention
 from fast_dit.Model.timestep_embedder import TimestepEmbedder
 
@@ -17,7 +17,8 @@ class ASDFDiT(nn.Module):
         asdf_channel=100,
         asdf_dim=40,
         context_dim=30,
-        num_heads=1,
+        num_heads=6,
+        head_dim=128,
         depth=28,
         mlp_ratio=4.0,
         class_dropout_prob=0.1,
@@ -27,27 +28,31 @@ class ASDFDiT(nn.Module):
         self.asdf_channel = asdf_channel
         self.asdf_dim = asdf_dim
         self.context_dim = context_dim
+        self.num_heads = num_heads
+        self.head_dim = head_dim
+
         self.learn_sigma = learn_sigma
         self.out_channels = 2 if learn_sigma else 1
-        self.num_heads = num_heads
-        self.hidden_size = asdf_dim
+        self.hidden_dim = num_heads * head_dim
 
-        assert self.hidden_size % num_heads == 0
-        head_dim = int(self.hidden_size / num_heads)
-
-        self.ty_cross_attention = CrossAttention(
-            self.hidden_size, context_dim, num_heads, head_dim, 0.0
+        self.xy_cross_attention = CrossAttention(
+            self.hidden_dim, self.hidden_dim, self.num_heads, self.head_dim, 0.0
         )
-        self.t_embedder = TimestepEmbedder(self.hidden_size)
+        self.ty_cross_attention = CrossAttention(
+            self.hidden_dim, self.hidden_dim, self.num_heads, self.head_dim, 0.0
+        )
+        self.x_embedder = nn.Linear(self.asdf_dim, self.hidden_dim, bias=False)
+        self.y_embedder = nn.Linear(self.context_dim, self.hidden_dim, bias=False)
+        self.t_embedder = TimestepEmbedder(self.hidden_dim)
 
         self.blocks = nn.ModuleList(
             [
-                DiTBlock(self.hidden_size, num_heads, mlp_ratio=mlp_ratio)
+                ASDFDiTBlock(self.hidden_dim, self.num_heads, mlp_ratio=mlp_ratio)
                 for _ in range(depth)
             ]
         )
         self.final_layer = FinalLayer(
-            self.hidden_size, 1, self.out_channels * self.hidden_size
+            self.hidden_dim, 1, self.out_channels * self.asdf_dim
         )
         self.initialize_weights()
 
@@ -90,27 +95,30 @@ class ASDFDiT(nn.Module):
         t: (N,) tensor of diffusion timesteps
         y: (N,) tensor of contexts
         """
-        print("DiT forward:")
-        print("x:", x.shape)
-        print("t:", t.shape)
-        print("y:", y.shape)
         B = x.shape[0]
+
         x = x.reshape(B, self.asdf_channel, self.asdf_dim)
         y = y.reshape(B, self.asdf_channel, self.context_dim)
-        t = self.t_embedder(t)  # (N, D)
-        t = t.reshape(B, 1, self.hidden_size)
-        print("after t_embedder, t:", t.shape)
+
+        x = self.x_embedder(x)
+        y = self.y_embedder(y)
+        t = self.t_embedder(t)
+
+        t = t.reshape(B, 1, self.hidden_dim)
+
+        xy = self.xy_cross_attention(x, y)
         ty = self.ty_cross_attention(t, y)
-        print("after ty_cross_attention, ty:", ty.shape)
-        c = t + ty  # (N, D)
-        c = c.reshape(B, self.hidden_size)
+        x = x + xy
+        c = t + ty
+
+        t = t.reshape(B, self.hidden_dim)
+        c = c.reshape(B, self.hidden_dim)
+
         for block in self.blocks:
             x = torch.utils.checkpoint.checkpoint(
                 self.ckpt_wrapper(block), x, c
             )  # (N, T, D)
-        print("after blocks, x:", x.shape)
-        x = self.final_layer(x, c)  # (N, T, out_channels)
-        print("after final_layer, x:", x.shape)
+        x = self.final_layer(x, t)  # (N, T, out_channels)
         x = x.reshape(B, self.out_channels, self.asdf_channel, self.asdf_dim)
         return x
 

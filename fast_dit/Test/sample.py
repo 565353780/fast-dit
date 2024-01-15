@@ -16,11 +16,14 @@ def test():
     asdf_channel = 100
     asdf_dim = 40
     context_dim = 30
-    num_heads = 1
+    num_heads = 6
+    head_dim = 128
     depth = 12
     num_sampling_steps = 2
 
-    model = ASDFDiT(asdf_channel, asdf_dim, context_dim, num_heads, depth).to(device)
+    model = ASDFDiT(asdf_channel, asdf_dim, context_dim, num_heads, head_dim, depth).to(
+        device
+    )
 
     # state_dict = find_model(ckpt_path)
     # model.load_state_dict(state_dict)
