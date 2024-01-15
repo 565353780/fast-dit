@@ -46,7 +46,9 @@ class ASDFDiT(nn.Module):
                 for _ in range(depth)
             ]
         )
-        self.final_layer = FinalLayer(self.hidden_size, 1, self.hidden_size)
+        self.final_layer = FinalLayer(
+            self.hidden_size, 1, self.out_channels * self.hidden_size
+        )
         self.initialize_weights()
 
     def initialize_weights(self):
@@ -109,7 +111,7 @@ class ASDFDiT(nn.Module):
         print("after blocks, x:", x.shape)
         x = self.final_layer(x, c)  # (N, T, out_channels)
         print("after final_layer, x:", x.shape)
-        x = x.reshape(B, 1, self.asdf_channel, self.asdf_dim)
+        x = x.reshape(B, self.out_channels, self.asdf_channel, self.asdf_dim)
         return x
 
     def forward_with_cfg(self, x, t, y, cfg_scale):
