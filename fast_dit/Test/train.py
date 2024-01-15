@@ -36,7 +36,6 @@ def test():
 
     # Setup accelerator:
     accelerator = Accelerator()
-    accelerator.device = "cpu"
     device = accelerator.device
 
     # Setup an experiment folder:
@@ -59,7 +58,7 @@ def test():
     # Create model:
     asdf_channel = 100
     asdf_dim = 40
-    context_dim = 40
+    context_dim = 30
     num_heads = 6
     head_dim = 64
     depth = 12
@@ -112,6 +111,8 @@ def test():
         if accelerator.is_main_process:
             logger.info(f"Beginning epoch {epoch}...")
         for x, y in loader:
+            print(x.dtype)
+            print(y.dtype)
             x = x.to(device)
             y = y.to(device)
             x = x.squeeze(dim=1)

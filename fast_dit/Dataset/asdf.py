@@ -22,7 +22,7 @@ class ASDFDataset(Dataset):
         asdf_file_path = self.asdf_file_list[idx]
         mesh_file_path = self.mesh_file_list[idx]
 
-        asdf = np.random.rand(100, 40)
-        context = np.random.rand(100, 30)
+        asdf = np.random.rand(1, 100, 40)
+        context = np.random.rand(1, 100, 30)
 
-        return torch.from_numpy(asdf), torch.from_numpy(context)
+        return torch.from_numpy(asdf).type(torch.float32), torch.from_numpy(context).type(torch.float32)
