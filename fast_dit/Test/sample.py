@@ -15,9 +15,9 @@ def test():
 
     asdf_channel = 100
     asdf_dim = 40
-    context_dim = 30
+    context_dim = 40
     num_heads = 6
-    head_dim = 128
+    head_dim = 64
     depth = 12
     num_sampling_steps = 2
 
