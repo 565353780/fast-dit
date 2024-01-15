@@ -111,12 +111,10 @@ def test():
         if accelerator.is_main_process:
             logger.info(f"Beginning epoch {epoch}...")
         for x, y in loader:
-            print(x.dtype)
-            print(y.dtype)
             x = x.to(device)
             y = y.to(device)
-            x = x.squeeze(dim=1)
-            y = y.squeeze(dim=1)
+            # x = x.squeeze(dim=1)
+            # y = y.squeeze(dim=1)
             t = torch.randint(0, diffusion.num_timesteps, (x.shape[0],), device=device)
             model_kwargs = dict(y=y)
             loss_dict = diffusion.training_losses(model, x, t, model_kwargs)

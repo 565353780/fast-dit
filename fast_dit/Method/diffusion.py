@@ -80,8 +80,7 @@ def discretized_gaussian_log_likelihood(x, *, means, log_scales):
     log_probs = th.where(
         x < -0.999,
         log_cdf_plus,
-        th.where(x > 0.999, log_one_minus_cdf_min,
-                 th.log(cdf_delta.clamp(min=1e-12))),
+        th.where(x > 0.999, log_one_minus_cdf_min, th.log(cdf_delta.clamp(min=1e-12))),
     )
     assert log_probs.shape == x.shape
     return log_probs
@@ -123,11 +122,9 @@ def get_beta_schedule(beta_schedule, *, beta_start, beta_end, num_diffusion_time
             beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
         )
     elif beta_schedule == "warmup10":
-        betas = _warmup_beta(beta_start, beta_end,
-                             num_diffusion_timesteps, 0.1)
+        betas = _warmup_beta(beta_start, beta_end, num_diffusion_timesteps, 0.1)
     elif beta_schedule == "warmup50":
-        betas = _warmup_beta(beta_start, beta_end,
-                             num_diffusion_timesteps, 0.5)
+        betas = _warmup_beta(beta_start, beta_end, num_diffusion_timesteps, 0.5)
     elif beta_schedule == "const":
         betas = beta_end * np.ones(num_diffusion_timesteps, dtype=np.float64)
     elif beta_schedule == "jsd":  # 1/T, 1/(T-1), 1/(T-2), ..., 1
@@ -195,7 +192,12 @@ def _extract_into_tensor(arr, timesteps, broadcast_shape):
                             dimension equal to the length of timesteps.
     :return: a tensor of shape [batch_size, 1, ...] where the shape has K dims.
     """
-    res = th.from_numpy(arr).to(device=timesteps.device)[timesteps].float()
+    res = (
+        th.from_numpy(arr)
+        .type(timesteps.dtype)
+        .to(device=timesteps.device)[timesteps]
+        .float()
+    )
     while len(res.shape) < len(broadcast_shape):
         res = res[..., None]
     return res + th.zeros(broadcast_shape, device=timesteps.device)
