@@ -23,13 +23,13 @@ def test():
     parser.add_argument("--results-dir", type=str, default="output")
     parser.add_argument("--image-size", type=int, choices=[256, 512], default=256)
     parser.add_argument("--num-classes", type=int, default=1000)
-    parser.add_argument("--epochs", type=int, default=1400)
+    parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--global-batch-size", type=int, default=2)
     parser.add_argument("--global-seed", type=int, default=0)
     # Choice doesn't affect training
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--log-every", type=int, default=100)
-    parser.add_argument("--ckpt-every", type=int, default=50_000)
+    parser.add_argument("--ckpt-every", type=int, default=100)
     args = parser.parse_args()
 
     # assert torch.cuda.is_available(), "Training currently requires at least one GPU."
@@ -58,7 +58,7 @@ def test():
     # Create model:
     asdf_channel = 100
     asdf_dim = 40
-    context_dim = 30
+    context_dim = 40
     num_heads = 6
     head_dim = 64
     depth = 12
@@ -149,7 +149,7 @@ def test():
             if train_steps % args.ckpt_every == 0 and train_steps > 0:
                 if accelerator.is_main_process:
                     checkpoint = {
-                        "model": model.module.state_dict(),
+                        "model": model.state_dict(),
                         "ema": ema.state_dict(),
                         "opt": opt.state_dict(),
                         "args": args,

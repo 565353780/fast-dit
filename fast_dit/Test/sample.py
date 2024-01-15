@@ -2,6 +2,7 @@ import torch
 
 from fast_dit.Model.diffusion import create_diffusion
 from fast_dit.Model.asdf_dit import ASDFDiT
+from fast_dit.Method.io import find_model
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
@@ -11,7 +12,7 @@ def test():
     # Setup PyTorch:
     torch.manual_seed(0)
     torch.set_grad_enabled(False)
-    device = "cpu"
+    device = "cuda"
 
     asdf_channel = 100
     asdf_dim = 40
@@ -25,8 +26,8 @@ def test():
         device
     )
 
-    # state_dict = find_model(ckpt_path)
-    # model.load_state_dict(state_dict)
+    state_dict = find_model('./output/014-ASDF/checkpoints/0000500.pt')
+    model.load_state_dict(state_dict)
     model.eval()  # important!
     diffusion = create_diffusion(str(num_sampling_steps))
 
