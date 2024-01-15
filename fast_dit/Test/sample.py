@@ -39,7 +39,7 @@ def test():
     # Labels to condition the model with (feel free to change):
 
     batch_size = 1
-    z = torch.randn(batch_size, asdf_dims[0], asdf_dims[1], device=device)
+    z = torch.randn(batch_size, 1, asdf_dims[0], asdf_dims[1], device=device)
     y = torch.tensor([1 for _ in range(batch_size)], device=device)
 
     # Setup classifier-free guidance:

@@ -98,7 +98,7 @@ class ASDFDiT(nn.Module):
         print("x:", x.shape)
         print("t:", t.shape)
         print("y:", y.shape)
-        N, H, W = x.shape
+        N, _, H, W = x.shape
         # (N, T, D), where T = H * W / patch_size ** 2
         x = self.x_embedder(x)
         print("after x_embedder, x:", x.shape)
