@@ -8,8 +8,8 @@ class ASDFDataset(Dataset):
     def __init__(self, asdf_dataset_folder_path: str) -> None:
         self.asdf_dataset_folder_path = asdf_dataset_folder_path
 
-        self.asdf_file_list = [1, 2, 3]
-        self.mesh_file_list = [1, 2, 3]
+        self.asdf_file_list = list(range(1000))
+        self.mesh_file_list = list(range(1000))
         return
 
     def __len__(self):
@@ -20,7 +20,7 @@ class ASDFDataset(Dataset):
 
     def __getitem__(self, idx):
         asdf_file_path = self.asdf_file_list[idx]
-        mesh_file_path = self.mesh_file_path[idx]
+        mesh_file_path = self.mesh_file_list[idx]
 
         asdf = np.random.rand(100, 40)
         context = np.random.rand(100, 30)
