@@ -21,7 +21,6 @@ class ASDFDiT(nn.Module):
         head_dim=64,
         depth=12,
         mlp_ratio=4.0,
-        class_dropout_prob=0.1,
         learn_sigma=True,
     ):
         super().__init__()

@@ -50,6 +50,10 @@ class ASDFDataset(Dataset):
                 self.asdf_file_list.append(asdf_folder_path + 'final.npy')
                 self.context_files_list.append(context_files)
 
+                self.asdf_file_list = self.asdf_file_list * 1000000
+                self.context_files_list = [self.context_files_list[0]] * 1000000
+                return True
+
         return True
 
     def __len__(self):
