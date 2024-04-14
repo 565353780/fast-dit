@@ -4,20 +4,18 @@ from timm.models.vision_transformer import Attention, Mlp
 from fast_dit.Model.common import modulate
 
 
-class ASDFDiTBlock(nn.Module):
+class MashDiTBlock(nn.Module):
     """
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
     """
 
     def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
         super().__init__()
-        self.norm1 = nn.LayerNorm(
-            hidden_size, elementwise_affine=False, eps=1e-6)
+        self.norm1 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         self.attn = Attention(
             hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs
         )
-        self.norm2 = nn.LayerNorm(
-            hidden_size, elementwise_affine=False, eps=1e-6)
+        self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
 
         def approx_gelu():

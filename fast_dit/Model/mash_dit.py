@@ -2,20 +2,20 @@ import torch
 import torch.nn as nn
 
 from fast_dit.Model.DiT.final_layer import FinalLayer
-from fast_dit.Model.DiT.asdf_block import ASDFDiTBlock
+from fast_dit.Model.DiT.mash_block import MashDiTBlock
 from fast_dit.Model.CrossAttention.cross import CrossAttention
 from fast_dit.Model.timestep_embedder import TimestepEmbedder
 
 
-class ASDFDiT(nn.Module):
+class MashDiT(nn.Module):
     """
     Diffusion model with a Transformer backbone.
     """
 
     def __init__(
         self,
-        asdf_channel=100,
-        asdf_dim=40,
+        mash_channel=40,
+        mash_dim=40,
         context_dim=30,
         num_heads=6,
         head_dim=64,
@@ -24,8 +24,8 @@ class ASDFDiT(nn.Module):
         learn_sigma=True,
     ):
         super().__init__()
-        self.asdf_channel = asdf_channel
-        self.asdf_dim = asdf_dim
+        self.mash_channel = mash_channel
+        self.mash_dim = mash_dim
         self.context_dim = context_dim
         self.num_heads = num_heads
         self.head_dim = head_dim
@@ -40,18 +40,18 @@ class ASDFDiT(nn.Module):
         self.ty_cross_attention = CrossAttention(
             self.hidden_dim, self.hidden_dim, self.num_heads, self.head_dim, 0.0
         )
-        self.x_embedder = nn.Linear(self.asdf_dim, self.hidden_dim, bias=False)
+        self.x_embedder = nn.Linear(self.mash_dim, self.hidden_dim, bias=False)
         self.y_embedder = nn.Linear(self.context_dim, self.hidden_dim, bias=False)
         self.t_embedder = TimestepEmbedder(self.hidden_dim)
 
         self.blocks = nn.ModuleList(
             [
-                ASDFDiTBlock(self.hidden_dim, self.num_heads, mlp_ratio=mlp_ratio)
+                MashDiTBlock(self.hidden_dim, self.num_heads, mlp_ratio=mlp_ratio)
                 for _ in range(depth)
             ]
         )
         self.final_layer = FinalLayer(
-            self.hidden_dim, 1, self.out_channels * self.asdf_dim
+            self.hidden_dim, 1, self.out_channels * self.mash_dim
         )
         self.initialize_weights()
 
@@ -96,8 +96,8 @@ class ASDFDiT(nn.Module):
         """
         B = x.shape[0]
 
-        x = x.reshape(B, self.asdf_channel, self.asdf_dim)
-        y = y.reshape(B, self.asdf_channel, self.context_dim)
+        x = x.reshape(B, self.mash_channel, self.mash_dim)
+        y = y.reshape(B, self.mash_channel, self.context_dim)
 
         x = self.x_embedder(x)
         y = self.y_embedder(y)
@@ -118,7 +118,7 @@ class ASDFDiT(nn.Module):
                 self.ckpt_wrapper(block), x, c
             )  # (N, T, D)
         x = self.final_layer(x, t)  # (N, T, out_channels)
-        x = x.reshape(B, self.out_channels, self.asdf_channel, self.asdf_dim)
+        x = x.reshape(B, self.out_channels, self.mash_channel, self.mash_dim)
         return x
 
     def forward_with_cfg(self, x, t, y, cfg_scale):
