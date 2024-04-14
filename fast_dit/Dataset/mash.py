@@ -83,17 +83,15 @@ class MashDataset(Dataset):
         mash_params = mash_params[np.random.permutation(mash_params.shape[0])]
 
         feed_dict = {
-            "mash_params": torch.tensor(mash_params).float(),
-            "category_id": torch.tensor(category_id).float(),
+            "mash_params": torch.tensor(mash_params).float().unsqueeze(0),
+            "category_id": torch.tensor(category_id),
         }
 
         if USE_FP_16:
             return feed_dict["mash_params"].type(torch.float16), feed_dict[
                 "category_id"
-            ].type(torch.float16)
+            ]
 
-        return feed_dict["mash_params"].type(torch.float32), feed_dict[
-            "category_id"
-        ].type(torch.float32)
+        return feed_dict["mash_params"].type(torch.float32), feed_dict["category_id"]
 
         return feed_dict

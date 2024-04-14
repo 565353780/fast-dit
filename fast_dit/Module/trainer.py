@@ -20,19 +20,12 @@ torch.backends.cudnn.allow_tf32 = True
 class Trainer(object):
     def __init__(self) -> None:
         self.mash_dataset_folder_path = "/home/chli/Dataset/"
-        self.epochs = 100000
-        self.global_batch_size = 4000
+        self.epochs = 10000000
+        self.global_batch_size = 120
         self.num_workers = 4
         self.log_every = 1
-        self.ckpt_every = 300000
+        self.ckpt_every = 50000
         self.lr = 1e-4
-
-        self.mash_channel = 40
-        self.mash_dim = 40
-        self.context_dim = 1
-        self.num_heads = 6
-        self.head_dim = 64
-        self.depth = 12
 
         # assert torch.cuda.is_available(), "Training currently requires at least one GPU."
 
@@ -58,14 +51,7 @@ class Trainer(object):
             logger.info(f"Experiment directory created at {self.output_folder_path}")
 
         # Create model:
-        model = MashDiT(
-            self.mash_channel,
-            self.mash_dim,
-            self.context_dim,
-            self.num_heads,
-            self.head_dim,
-            self.depth,
-        ).to(self.device)
+        model = MashDiT().to(self.device)
         # Note that parameter initialization is done within the DiT constructor
         model = model.to(self.device)
         # Create an EMA of the model for use after training
