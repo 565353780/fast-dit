@@ -5,7 +5,6 @@ from ma_sh.Model.mash import Mash
 
 from fast_dit.Model.diffusion import create_diffusion
 from fast_dit.Model.dit import DiT
-from fast_dit.Method.io import find_model
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
@@ -49,7 +48,7 @@ class Sampler(object):
     def sample(self, sample_num: int, category_id: int) -> torch.Tensor:
         model = DiT(self.image_dim, self.patch_size, self.mash_channel, self.context_dim, self.depth, self.num_heads).to(self.device)
 
-        state_dict = find_model(self.model_file_path)
+        state_dict = torch.load(self.model_file_path)['model']
         model.load_state_dict(state_dict)
         model.eval()  # important!
         diffusion = create_diffusion("", diffusion_steps=self.diffusion_steps)

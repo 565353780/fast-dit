@@ -2,14 +2,14 @@ import os
 import torch
 from time import time
 from math import sqrt
-from copy import deepcopy
+from typing import Union
 from accelerate import Accelerator
 from torch.utils.data import DataLoader
 
 from fast_dit.Dataset.mash import MashDataset
 from fast_dit.Model.dit import DiT
 from fast_dit.Model.diffusion import create_diffusion
-from fast_dit.Method.train import update_ema, requires_grad, create_logger
+from fast_dit.Method.train import create_logger
 from fast_dit.Method.time import getCurrentTime
 from fast_dit.Module.logger import Logger
 
@@ -19,14 +19,16 @@ torch.backends.cudnn.allow_tf32 = True
 
 
 class Trainer(object):
-    def __init__(self) -> None:
+    def __init__(self, model_file_path: Union[str, None]=None) -> None:
         self.dataset_folder_path = '/home/chli/Dataset/'
+        self.model_file_path = model_file_path
+
         self.epochs = 100000
         self.global_batch_size = 2000
         self.num_workers = 16
         self.log_every = 1
         self.ckpt_every = 100
-        self.lr = 1e-3
+        self.lr = 1e-4
 
         self.mash_channel = 22
         self.mash_dim = 400
@@ -50,6 +52,7 @@ class Trainer(object):
             os.makedirs(self.output_folder_path, exist_ok=True)
             os.makedirs(log_folder_path, exist_ok=True)
             self.logger = Logger(log_folder_path)
+
         return
 
     def trainStep(self) -> bool:
@@ -64,9 +67,10 @@ class Trainer(object):
         # Create model:
         model = DiT(self.image_dim, self.patch_size, self.mash_channel, self.context_dim, self.depth, self.num_heads).to(self.device)
 
-        # Create an EMA of the model for use after training
-        ema = deepcopy(model).to(self.device)
-        requires_grad(ema, False)
+        if self.model_file_path is not None:
+            state_dict = torch.load(self.model_file_path)['model']
+            model.load_state_dict(state_dict)
+
         # default: 1000 steps, linear noise schedule
         diffusion = create_diffusion(timestep_respacing="", diffusion_steps=self.diffusion_steps)
         if self.accelerator.is_main_process:
@@ -91,10 +95,7 @@ class Trainer(object):
             logger.info(f"Dataset contains {len(dataset):,} Mashes")
 
         # Prepare models for training:
-        # Ensure EMA is initialized with synced weights
-        update_ema(ema, model, decay=0)
         model.train()  # important! This enables embedding dropout for classifier-free guidance
-        ema.eval()  # EMA model should always be in eval mode
         model, opt, loader = self.accelerator.prepare(model, opt, loader)
 
         # Variables for monitoring/logging purposes:
@@ -122,7 +123,6 @@ class Trainer(object):
                 opt.zero_grad()
                 self.accelerator.backward(loss)
                 opt.step()
-                update_ema(ema, model)
 
                 # Log loss values:
                 running_loss += loss.item()
@@ -156,7 +156,6 @@ class Trainer(object):
                     if self.accelerator.is_main_process:
                         checkpoint = {
                             "model": model.state_dict(),
-                            "ema": ema.state_dict(),
                             "opt": opt.state_dict(),
                         }
                         checkpoint_path = (
@@ -166,7 +165,6 @@ class Trainer(object):
                         logger.info(f"Saved checkpoint to {checkpoint_path}")
 
         model.eval()  # important! This disables randomized embedding dropout
-        # do any sampling/FID calculation/etc. with ema (or model) in eval mode ...
 
         if self.accelerator.is_main_process:
             logger.info("Done!")
