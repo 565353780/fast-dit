@@ -24,7 +24,7 @@ class Trainer(object):
         self.global_batch_size = 1000
         self.num_workers = 4
         self.log_every = 1
-        self.ckpt_every = 300000
+        self.ckpt_every = 50000
         self.lr = 1e-4
 
         self.mash_channel = 400
@@ -43,8 +43,8 @@ class Trainer(object):
 
         if self.accelerator.is_main_process:
             current_time = getCurrentTime()
-            self.output_folder_path = './output/' + current_time + '/'
-            log_folder_path = './logs/' + current_time + '/'
+            self.output_folder_path = "./output/" + current_time + "/"
+            log_folder_path = "./logs/" + current_time + "/"
             os.makedirs(self.output_folder_path, exist_ok=True)
             os.makedirs(log_folder_path, exist_ok=True)
             self.logger = Logger(log_folder_path)
@@ -71,7 +71,9 @@ class Trainer(object):
         # default: 1000 steps, linear noise schedule
         diffusion = create_diffusion(timestep_respacing="", diffusion_steps=self.diffusion_steps)
         if self.accelerator.is_main_process:
-            logger.info(f"DiT Parameters: {sum(p.numel() for p in model.parameters()):,}")
+            logger.info(
+                f"DiT Parameters: {sum(p.numel() for p in model.parameters()):,}"
+            )
 
         # Setup optimizer (we used default Adam betas=(0.9, 0.999) and a constant learning rate of 1e-4 in our paper):
         opt = torch.optim.AdamW(model.parameters(), lr=self.lr, weight_decay=0)
@@ -112,7 +114,9 @@ class Trainer(object):
                 y = y.to(self.device)
                 # x = x.squeeze(dim=1)
                 # y = y.squeeze(dim=1)
-                t = torch.randint(0, diffusion.num_timesteps, (x.shape[0],), device=self.device)
+                t = torch.randint(
+                    0, diffusion.num_timesteps, (x.shape[0],), device=self.device
+                )
                 model_kwargs = dict(y=y)
                 loss_dict = diffusion.training_losses(model, x, t, model_kwargs)
                 loss = loss_dict["loss"].mean()
@@ -131,15 +135,17 @@ class Trainer(object):
                     end_time = time()
                     steps_per_sec = log_steps / (end_time - start_time)
                     # Reduce loss history over all processes:
-                    avg_loss = torch.tensor(running_loss / log_steps, device=self.device)
+                    avg_loss = torch.tensor(
+                        running_loss / log_steps, device=self.device
+                    )
                     avg_loss = avg_loss.item() / self.accelerator.num_processes
                     if self.accelerator.is_main_process:
                         logger.info(
                             f"(step={train_steps:07d}) Train Loss: {avg_loss:.4f}, Train Steps/Sec: {steps_per_sec:.2f}"
                         )
 
-                        self.logger.addScalar('Train/loss', avg_loss)
-                        self.logger.addScalar('Train/StepSec', steps_per_sec)
+                        self.logger.addScalar("Train/loss", avg_loss)
+                        self.logger.addScalar("Train/StepSec", steps_per_sec)
                     # Reset monitoring variables:
                     running_loss = 0
                     log_steps = 0
@@ -153,7 +159,9 @@ class Trainer(object):
                             "ema": ema.state_dict(),
                             "opt": opt.state_dict(),
                         }
-                        checkpoint_path = f"{self.output_folder_path}/{train_steps:07d}.pt"
+                        checkpoint_path = (
+                            f"{self.output_folder_path}/{train_steps:07d}.pt"
+                        )
                         torch.save(checkpoint, checkpoint_path)
                         logger.info(f"Saved checkpoint to {checkpoint_path}")
 

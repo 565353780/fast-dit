@@ -1,10 +1,15 @@
 import torch
 import torch.nn as nn
+from timm.models.vision_transformer import PatchEmbed
 
 from fast_dit.Model.DiT.final_layer import FinalLayer
 from fast_dit.Model.DiT.mash_block import MashDiTBlock
 from fast_dit.Model.CrossAttention.cross import CrossAttention
 from fast_dit.Model.timestep_embedder import TimestepEmbedder
+from fast_dit.Model.label_embedder import LabelEmbedder
+from fast_dit.Model.DiT.block import DiTBlock
+from fast_dit.Model.DiT.final_layer import FinalLayer
+from fast_dit.Method.embed import get_2d_sincos_pos_embed
 
 
 class MashDiT(nn.Module):
@@ -21,6 +26,8 @@ class MashDiT(nn.Module):
         head_dim=64,
         depth=12,
         mlp_ratio=4.0,
+        class_dropout_prob=0.1,
+        num_classes=55,
         learn_sigma=True,
     ):
         super().__init__()
@@ -31,14 +38,20 @@ class MashDiT(nn.Module):
         self.head_dim = head_dim
 
         self.learn_sigma = learn_sigma
-        self.out_channels = 2 if learn_sigma else 1
-        self.hidden_dim = num_heads * head_dim
+        self.in_channels = in_channels
+        self.out_channels = in_channels * 2 if learn_sigma else in_channels
+        self.patch_size = patch_size
+        self.num_heads = num_heads
 
-        self.xy_cross_attention = CrossAttention(
-            self.hidden_dim, self.hidden_dim, self.num_heads, self.head_dim, 0.0
+        self.x_embedder = PatchEmbed(
+            input_size, patch_size, in_channels, hidden_size, bias=True
         )
-        self.ty_cross_attention = CrossAttention(
-            self.hidden_dim, self.hidden_dim, self.num_heads, self.head_dim, 0.0
+        self.t_embedder = TimestepEmbedder(hidden_size)
+        self.y_embedder = LabelEmbedder(num_classes, hidden_size, class_dropout_prob)
+        num_patches = self.x_embedder.num_patches
+        # Will use fixed sin-cos embedding:
+        self.pos_embed = nn.Parameter(
+            torch.zeros(1, num_patches, hidden_size), requires_grad=False
         )
         self.x_embedder = nn.Linear(self.mash_dim, self.hidden_dim, bias=False)
         self.y_embedder = nn.Linear(self.context_dim, self.hidden_dim, bias=False)
@@ -65,6 +78,20 @@ class MashDiT(nn.Module):
 
         self.apply(_basic_init)
 
+        # Initialize (and freeze) pos_embed by sin-cos embedding:
+        pos_embed = get_2d_sincos_pos_embed(
+            self.pos_embed.shape[-1], int(self.x_embedder.num_patches**0.5)
+        )
+        self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
+
+        # Initialize patch_embed like nn.Linear (instead of nn.Conv2d):
+        w = self.x_embedder.proj.weight.data
+        nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+        nn.init.constant_(self.x_embedder.proj.bias, 0)
+
+        # Initialize label embedding table:
+        nn.init.normal_(self.y_embedder.embedding_table.weight, std=0.02)
+
         # Initialize timestep embedding MLP:
         nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
         nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
@@ -80,6 +107,21 @@ class MashDiT(nn.Module):
         nn.init.constant_(self.final_layer.linear.weight, 0)
         nn.init.constant_(self.final_layer.linear.bias, 0)
 
+    def unpatchify(self, x):
+        """
+        x: (N, T, patch_size**2 * C)
+        imgs: (N, H, W, C)
+        """
+        c = self.out_channels
+        p = self.x_embedder.patch_size[0]
+        h = w = int(x.shape[1] ** 0.5)
+        assert h * w == x.shape[1]
+
+        x = x.reshape(shape=(x.shape[0], h, w, p, p, c))
+        x = torch.einsum("nhwpqc->nchpwq", x)
+        imgs = x.reshape(shape=(x.shape[0], c, h * p, h * p))
+        return imgs
+
     def ckpt_wrapper(self, module):
         def ckpt_forward(*inputs):
             outputs = module(*inputs)
@@ -92,7 +134,7 @@ class MashDiT(nn.Module):
         Forward pass of DiT.
         x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
         t: (N,) tensor of diffusion timesteps
-        y: (N,) tensor of contexts
+        y: (N,) tensor of class labels
         """
         B = x.shape[0]
 
@@ -131,7 +173,7 @@ class MashDiT(nn.Module):
         # For exact reproducibility reasons, we apply classifier-free guidance on only
         # three channels by default. The standard approach to cfg applies it to all channels.
         # This can be done by uncommenting the following line and commenting-out the line following that.
-        # eps = model_out[:, 0]
+        # eps, rest = model_out[:, :self.in_channels], model_out[:, self.in_channels:]
         eps, rest = model_out[:, :3], model_out[:, 3:]
         cond_eps, uncond_eps = torch.split(eps, len(eps) // 2, dim=0)
         half_eps = uncond_eps + cfg_scale * (cond_eps - uncond_eps)
