@@ -1,7 +1,6 @@
 import os
 import torch
 import numpy as np
-from tqdm import tqdm
 from torch.utils.data import Dataset
 
 from fast_dit.Config.fp import USE_FP_16

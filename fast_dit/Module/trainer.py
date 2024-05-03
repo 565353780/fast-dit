@@ -22,25 +22,23 @@ class Trainer(object):
     def __init__(self) -> None:
         self.dataset_folder_path = '/home/chli/Dataset/'
         self.epochs = 100000
-        self.global_batch_size = 800
-        self.num_workers = 4
+        self.global_batch_size = 2000
+        self.num_workers = 16
         self.log_every = 1
-        self.ckpt_every = 1000
-        self.lr = 1e-4
+        self.ckpt_every = 100
+        self.lr = 1e-3
 
         self.mash_channel = 22
         self.mash_dim = 400
         self.context_dim = 768
         self.patch_size = 2
-        self.num_heads = 16
-        self.depth = 28
+        self.num_heads = 6
+        self.depth = 12
 
         self.image_dim = int(sqrt(self.mash_dim))
         assert self.image_dim ** 2 == self.mash_dim
 
         self.diffusion_steps=36
-
-        # assert torch.cuda.is_available(), "Training currently requires at least one GPU."
 
         self.accelerator = Accelerator()
         self.device = self.accelerator.device
@@ -66,8 +64,6 @@ class Trainer(object):
         # Create model:
         model = DiT(self.image_dim, self.patch_size, self.mash_channel, self.context_dim, self.depth, self.num_heads).to(self.device)
 
-        # Note that parameter initialization is done within the DiT constructor
-        model = model.to(self.device)
         # Create an EMA of the model for use after training
         ema = deepcopy(model).to(self.device)
         requires_grad(ema, False)
