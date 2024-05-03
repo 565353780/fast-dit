@@ -6,6 +6,8 @@ from typing import Union
 from accelerate import Accelerator
 from torch.utils.data import DataLoader
 
+from ldm.modules.diffusionmodules.openaimodel import UNetModel
+
 from fast_dit.Dataset.mash import MashDataset
 from fast_dit.Model.dit import DiT
 from fast_dit.Model.diffusion import create_diffusion
@@ -24,7 +26,7 @@ class Trainer(object):
         self.model_file_path = model_file_path
 
         self.epochs = 100000
-        self.global_batch_size = 2000
+        self.global_batch_size = 20
         self.num_workers = 16
         self.log_every = 1
         self.ckpt_every = 100
@@ -36,6 +38,13 @@ class Trainer(object):
         self.patch_size = 2
         self.num_heads = 6
         self.depth = 12
+
+        #UNet
+        self.d_head = 32
+        self.hidden_channels = self.d_head * 8
+        self.num_res_blocks = 2
+        self.attention_resolutions=[4, 2, 1]
+        self.channel_mult=[1, 2, 4]
 
         self.image_dim = int(sqrt(self.mash_dim))
         assert self.image_dim ** 2 == self.mash_dim
@@ -65,11 +74,27 @@ class Trainer(object):
             logger.info(f"Experiment directory created at {self.output_folder_path}")
 
         # Create model:
-        model = DiT(self.image_dim, self.patch_size, self.mash_channel, self.context_dim, self.depth, self.num_heads).to(self.device)
+        if True:
+            model = DiT(self.image_dim, self.patch_size, self.mash_channel, self.context_dim, self.depth, self.num_heads).to(self.device)
+        else:
+            model = UNetModel(
+                image_size=self.image_dim,
+                in_channels=self.mash_channel,
+                model_channels=self.hidden_channels,
+                out_channels=self.mash_channel * 2,
+                num_res_blocks=self.num_res_blocks,
+                attention_resolutions=self.attention_resolutions,
+                channel_mult=self.channel_mult,
+                num_head_channels=self.d_head,
+                num_classes=55).to(self.device)
 
         if self.model_file_path is not None:
-            state_dict = torch.load(self.model_file_path)['model']
-            model.load_state_dict(state_dict)
+            try:
+                state_dict = torch.load(self.model_file_path)['model']
+                model.load_state_dict(state_dict)
+            except:
+                print('load model failed!!!!')
+                pass
 
         # default: 1000 steps, linear noise schedule
         diffusion = create_diffusion(timestep_respacing="", diffusion_steps=self.diffusion_steps)

@@ -1,1 +1,1 @@
-USE_FP_16 = True
+USE_FP_16 = False
