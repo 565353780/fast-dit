@@ -5,8 +5,8 @@ from copy import deepcopy
 from accelerate import Accelerator
 from torch.utils.data import DataLoader
 
-from fast_dit.Dataset.asdf import ASDFDataset
-from fast_dit.Model.asdf_dit import ASDFDiT
+from fast_dit.Dataset.mash import MashDataset
+from fast_dit.Model.mash_dit import MashDiT
 from fast_dit.Model.diffusion import create_diffusion
 from fast_dit.Method.train import update_ema, requires_grad, create_logger
 from fast_dit.Method.time import getCurrentTime
@@ -19,20 +19,22 @@ torch.backends.cudnn.allow_tf32 = True
 
 class Trainer(object):
     def __init__(self) -> None:
-        self.asdf_dataset_folder_path = '/home/chli/chLi/Dataset/ShapeNet/asdf/'
+        self.dataset_folder_path = '/home/chli/Dataset/'
         self.epochs = 100000
-        self.global_batch_size = 4000
+        self.global_batch_size = 1000
         self.num_workers = 4
         self.log_every = 1
         self.ckpt_every = 300000
         self.lr = 1e-4
 
-        self.asdf_channel = 100
-        self.asdf_dim = 40
-        self.context_dim = 40
+        self.mash_channel = 400
+        self.mash_dim = 22
+        self.context_dim = 768
         self.num_heads = 6
         self.head_dim = 64
         self.depth = 12
+
+        self.diffusion_steps=36
 
         # assert torch.cuda.is_available(), "Training currently requires at least one GPU."
 
@@ -58,7 +60,7 @@ class Trainer(object):
             logger.info(f"Experiment directory created at {self.output_folder_path}")
 
         # Create model:
-        model = ASDFDiT(self.asdf_channel, self.asdf_dim, self.context_dim, self.num_heads, self.head_dim, self.depth).to(
+        model = MashDiT(self.mash_channel, self.mash_dim, self.context_dim, self.num_heads, self.head_dim, self.depth).to(
             self.device
         )
         # Note that parameter initialization is done within the DiT constructor
@@ -67,25 +69,25 @@ class Trainer(object):
         ema = deepcopy(model).to(self.device)
         requires_grad(ema, False)
         # default: 1000 steps, linear noise schedule
-        diffusion = create_diffusion(timestep_respacing="")
+        diffusion = create_diffusion(timestep_respacing="", diffusion_steps=self.diffusion_steps)
         if self.accelerator.is_main_process:
             logger.info(f"DiT Parameters: {sum(p.numel() for p in model.parameters()):,}")
 
         # Setup optimizer (we used default Adam betas=(0.9, 0.999) and a constant learning rate of 1e-4 in our paper):
-        opt = torch.optim.Adagrad(model.parameters(), lr=self.lr, weight_decay=0)
+        opt = torch.optim.AdamW(model.parameters(), lr=self.lr, weight_decay=0)
 
         # Setup data:
-        dataset = ASDFDataset(self.asdf_dataset_folder_path)
+        dataset = MashDataset(self.dataset_folder_path)
         loader = DataLoader(
             dataset,
             batch_size=int(self.global_batch_size // self.accelerator.num_processes),
             shuffle=True,
             num_workers=self.num_workers,
             pin_memory=True,
-            drop_last=True,
+            drop_last=False,
         )
         if self.accelerator.is_main_process:
-            logger.info(f"Dataset contains {len(dataset):,} ASDFs")
+            logger.info(f"Dataset contains {len(dataset):,} Mashes")
 
         # Prepare models for training:
         # Ensure EMA is initialized with synced weights

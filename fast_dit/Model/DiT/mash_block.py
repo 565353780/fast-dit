@@ -4,7 +4,7 @@ from timm.models.vision_transformer import Attention, Mlp
 from fast_dit.Model.common import modulate
 
 
-class ASDFDiTBlock(nn.Module):
+class MashDiTBlock(nn.Module):
     """
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
     """
