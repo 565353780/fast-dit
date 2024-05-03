@@ -91,10 +91,12 @@ class MashDataset(Dataset):
         else:
             mash_params = np.hstack([rotate_vectors, positions, mask_params, sh_params])
 
-        mash_params = mash_params[np.random.permutation(mash_params.shape[0])].reshape(1, *mash_params.shape)
-        category_label = np.zeros([1, 768], dtype=float) * category_id
+        mash_params = mash_params[np.random.permutation(mash_params.shape[0])]
+
+        mash_params = torch.from_numpy(mash_params).permute(1, 0).reshape(-1, 20, 20)
+        category_label = torch.tensor(category_id).type(torch.long)
 
         if USE_FP_16:
-            return torch.from_numpy(mash_params).type(torch.float16), torch.from_numpy(category_label).type(torch.float16)
+            return mash_params.type(torch.float16), category_label
 
-        return torch.from_numpy(mash_params).type(torch.float32), torch.from_numpy(category_label).type(torch.float32)
+        return mash_params.type(torch.float32), category_label

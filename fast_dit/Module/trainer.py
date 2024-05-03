@@ -1,12 +1,13 @@
 import os
 import torch
 from time import time
+from math import sqrt
 from copy import deepcopy
 from accelerate import Accelerator
 from torch.utils.data import DataLoader
 
 from fast_dit.Dataset.mash import MashDataset
-from fast_dit.Model.mash_dit import MashDiT
+from fast_dit.Model.dit import DiT
 from fast_dit.Model.diffusion import create_diffusion
 from fast_dit.Method.train import update_ema, requires_grad, create_logger
 from fast_dit.Method.time import getCurrentTime
@@ -21,18 +22,21 @@ class Trainer(object):
     def __init__(self) -> None:
         self.dataset_folder_path = '/home/chli/Dataset/'
         self.epochs = 100000
-        self.global_batch_size = 1000
+        self.global_batch_size = 800
         self.num_workers = 4
         self.log_every = 1
-        self.ckpt_every = 50000
+        self.ckpt_every = 1000
         self.lr = 1e-4
 
-        self.mash_channel = 400
-        self.mash_dim = 22
+        self.mash_channel = 22
+        self.mash_dim = 400
         self.context_dim = 768
-        self.num_heads = 6
-        self.head_dim = 64
-        self.depth = 12
+        self.patch_size = 2
+        self.num_heads = 16
+        self.depth = 28
+
+        self.image_dim = int(sqrt(self.mash_dim))
+        assert self.image_dim ** 2 == self.mash_dim
 
         self.diffusion_steps=36
 
@@ -60,9 +64,8 @@ class Trainer(object):
             logger.info(f"Experiment directory created at {self.output_folder_path}")
 
         # Create model:
-        model = MashDiT(self.mash_channel, self.mash_dim, self.context_dim, self.num_heads, self.head_dim, self.depth).to(
-            self.device
-        )
+        model = DiT(self.image_dim, self.patch_size, self.mash_channel, self.context_dim, self.depth, self.num_heads).to(self.device)
+
         # Note that parameter initialization is done within the DiT constructor
         model = model.to(self.device)
         # Create an EMA of the model for use after training
@@ -146,6 +149,7 @@ class Trainer(object):
 
                         self.logger.addScalar("Train/loss", avg_loss)
                         self.logger.addScalar("Train/StepSec", steps_per_sec)
+                        self.logger.addScalar("Train/Lr", opt.state_dict()['param_groups'][0]['lr'])
                     # Reset monitoring variables:
                     running_loss = 0
                     log_steps = 0
@@ -160,7 +164,7 @@ class Trainer(object):
                             "opt": opt.state_dict(),
                         }
                         checkpoint_path = (
-                            f"{self.output_folder_path}/{train_steps:07d}.pt"
+                            f"{self.output_folder_path}/model_last.pt"
                         )
                         torch.save(checkpoint, checkpoint_path)
                         logger.info(f"Saved checkpoint to {checkpoint_path}")
